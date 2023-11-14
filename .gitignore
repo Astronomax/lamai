@@ -1,0 +1,7 @@
+*.a
+*.o
+/cmake-build-debug
+.idea
+/runtime/*.a
+/runtime/*.o
+lamai
