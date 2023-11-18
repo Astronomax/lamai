@@ -16,5 +16,8 @@
 #define WORD_SIZE (CHAR_BIT * sizeof(int))
 
 void failure (char *s, ...);
+int Llength (void *p);
+void *Bsexp_ (int n);
+void *Barray_ (int bn);
 
 #endif
