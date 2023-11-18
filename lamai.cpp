@@ -128,7 +128,7 @@ struct TValue{
 };
 
 struct CallInfo {
-    int args, locs;
+    int args, locs, caps;
     StkId base;
     char *retip;
 };
@@ -253,6 +253,7 @@ static TValue *idx2StkId(lama_State *L, int idx) {
 static TValue *loc2adr(lama_State *L, lama_Loc loc) {
     int idx = loc.idx;
     check(idx >= 0);
+    int caps = L->ci->caps;
     int args = L->ci->args;
     int locs = L->ci->locs;
     switch (loc.tt) {
@@ -266,7 +267,8 @@ static TValue *loc2adr(lama_State *L, lama_Loc loc) {
             check(idx < args);
             return L->base - (args + locs) + idx;
         case LOC_C:
-            not_implemented;
+            check(idx < caps);
+            return L->base - (caps + args + locs) + idx;
         default: FAIL;
     }
 }
@@ -460,12 +462,13 @@ void printargs(lama_State *L) {
 #define printlocals(l) (void)0
 #define printargs(l) (void)0
 
-static void lama_begin(lama_State *L, int args, int locs, char *retip) {
+static void lama_begin(lama_State *L, int caps, int args, int locs, char *retip) {
     //printstack(L);
 
     inc_ci(L)
     CallInfo *ci = L->ci;
     ci->retip = retip;
+    ci->caps = caps;
     ci->args = args;
     ci->locs = locs;
 
@@ -483,10 +486,11 @@ static void lama_begin(lama_State *L, int args, int locs, char *retip) {
 
 static void lama_end(lama_State *L) {
     TValue ret = *unref(idx2StkId(L, 1));
+    int caps = L->ci->caps;
     int args = L->ci->args;
     int locs = L->ci->locs;
     check((L->top - L->base) == 1);
-    L->top -= args + locs + 1;
+    L->top -= caps + args + locs + 1;
     L->ip = L->ci->retip;
     --L->ci;
     L->base = L->ci->base;
@@ -519,9 +523,8 @@ void disassemble (FILE *f, bytefile *bf) {
     L->ci->locs = L->ci->args = 0;
     L->ci->base = L->base;
 
-    char *retip;
-
-    retip = code_stop_ptr;
+    char *retip = code_stop_ptr;
+    int caps, func_offset;
 
     do {
         printstack(L);
@@ -533,6 +536,9 @@ void disassemble (FILE *f, bytefile *bf) {
             case 15:
                 goto stop;
             case 0: { //BINOP
+                //fprintf(f, "BINOP\n");
+                fflush(f);
+
                 lama_Number nb, nc;
                 TValue *rc = unref(idx2StkId(L, 1));
                 check(ttisnumber(rc));
@@ -626,7 +632,7 @@ void disassemble (FILE *f, bytefile *bf) {
                         break;
                     case 7:
                         not_implemented;
-                        //fprintf (f, "RET");
+                        fprintf (f, "RET");
                     case 8: //DROP
                         //fprintf (f, "DROP\n");
                         fflush(f);
@@ -663,7 +669,7 @@ void disassemble (FILE *f, bytefile *bf) {
                             lama_pushref(L, lama_Ref{{0, 0}, arr->value.sexp.arr + i});
                             //lama_pushTValue(L, arr->value.sexp.arr[i]);
                         else
-                            lama_pushnumber(L, (int)(*(arr->value.str + i)));
+                            lama_pushnumber(L, (int)(arr->value.str[i]));
                         //incr_top(L);
                         break;
                     }
@@ -730,52 +736,68 @@ void disassemble (FILE *f, bytefile *bf) {
                         fflush(f);
 
                         int args = INT, locs = INT;
-                        lama_begin(L, args, locs, retip);
+                        lama_begin(L, 0, args, locs, retip);
                         break;
                     }
-                    case 3:
-                        not_implemented;
-                        //fprintf (f, "CBEGIN\t%d ", INT);
-                        //fprintf (f, "%d", INT);
-                    case 4:
-                        not_implemented;
-                        /*fprintf (f, "CLOSURE\t0x%.8x", INT);
-                        {int n = INT;
-                            for (int i = 0; i<n; i++) {
-                                switch (BYTE) {
-                                    case 0: fprintf (f, "G(%d)", INT); break;
-                                    case 1: fprintf (f, "L(%d)", INT); break;
-                                    case 2: fprintf (f, "A(%d)", INT); break;
-                                    case 3: fprintf (f, "C(%d)", INT); break;
-                                    default: FAIL;
-                                }
-                            }
-                        };*/
-                    case 5:
-                        not_implemented;
-                        //fprintf (f, "CALLC\t%d", INT);
+                    case 3: { //CBEGIN
+                        //not_implemented;
+                        //fprintf (f, "CBEGIN\n");
+                        fflush(f);
+
+                        int args = INT, locs = INT;
+                        lama_begin(L, caps, args, locs, retip);
+                        break;
+                    }
+                    case 4: { //CLOSURE
+                        //fprintf (f, "CLOSURE\n");
+                        fflush(f);
+
+                        func_offset = INT;
+                        caps = INT;
+                        for (int i = 0; i < caps; i++) {
+                            char tt = BYTE;
+                            int idx = INT;
+                            lama_pushTValue(L, *unref(loc2adr(L, lama_Loc{idx, tt})));
+                        }
+                        break;
+                    }
+                    case 5: { //CALLC
+                        //not_implemented;
+                        //fprintf (f, "CALLC\n");
+                        fflush(f);
+
+                        int args = INT;
+
+                        char *func_ptr = bf->code_ptr + func_offset;
+                        check(((*func_ptr & 0xF0) >> 4) == 5);
+                        check((*func_ptr & 0x0F) == 2 || (*func_ptr & 0x0F) == 3);
+
+                        retip = L->ip;
+                        L->ip = func_ptr;
+                        break;
+                    }
                     case 6: { //CALL
                         //fprintf (f, "CALL\n");
                         fflush(f);
 
-                        //not_implemented;
-                        int funcoffset = INT, args = INT;
+                        int func_offset = INT, args = INT;
+
+                        char *func_ptr = bf->code_ptr + func_offset;
+                        check(((*func_ptr & 0xF0) >> 4) == 5);
+                        check((*func_ptr & 0x0F) == 2 || (*func_ptr & 0x0F) == 3);
 
                         retip = L->ip;
-
-                        char *funcptr = bf->code_ptr + funcoffset;
-                        check(((*funcptr & 0xF0) >> 4) == 5);
-                        check((*funcptr & 0x0F) == 2);
-                        L->ip = funcptr;
+                        L->ip = func_ptr;
                         break;
-                        //fprintf (f, "CALL\t0x%.8x ", INT);
-                        //fprintf (f, "%d", INT);
                     }
                     case 7:
                         not_implemented;
                         //fprintf (f, "TAG\t%s ", STRING);
                         //fprintf (f, "%d", INT);
                     case 8: { //ARRAY
+                        //fprintf (f, "ARRAY\n");
+                        fflush(f);
+
                         int n = INT;
                         lama_Array arr = {n, allocArray(n)};
                         for (int i = 0; i < n; i++)
