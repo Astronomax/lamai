@@ -92,7 +92,7 @@ bytefile* read_file (char *fname) {
 }
 struct TValue;
 typedef int lama_Number;
-typedef const char* lama_String;
+typedef char* lama_String;
 struct lama_Array {
     int n;
     TValue *arr;
@@ -271,15 +271,21 @@ static TValue *loc2adr(lama_State *L, lama_Loc loc) {
     }
 }
 
+TValue *unref(TValue *o) {
+    if (ttisref(o))
+        return refvalue(o)->ptr;
+    return o;
+}
+
 static lama_Number* lama_tonumber(lama_State *L, int idx) {
-    TValue *o = idx2StkId(L, idx);
+    TValue *o = unref(idx2StkId(L, idx));
     if(ttisnumber(o))
         return numvalue(o);
     else FAIL;
 }
 
 static lama_Array* lama_toarray(lama_State *L, int idx) {
-    TValue *o = idx2StkId(L, idx);
+    TValue *o = unref(idx2StkId(L, idx));
     if(ttisarray(o))
         return arrvalue(o);
     else FAIL;
@@ -342,12 +348,6 @@ static TValue *allocArray(int n) {
     return new TValue [n];
 }
 
-TValue *unref(TValue *o) {
-    if (ttisref(o))
-        return refvalue(o)->ptr;
-    return o;
-}
-
 void printstack(lama_State *L) {
     printf("stack\n");
     for (int i = 0; i < L->top - L->base; i++) {
@@ -372,8 +372,20 @@ void printstack(lama_State *L) {
                 printf("(ref) ");
             else if(ttissexp(refvalue(id)->ptr))
                 printf("(sexp) ");
-            else if(ttisarray(refvalue(id)->ptr))
-                printf("(arr) ");
+            else if(ttisarray(refvalue(id)->ptr)) {
+                printf("(arr: [");
+                lama_Array arr = *arrvalue(refvalue(id)->ptr);
+
+                for(int j = 0; j < arr.n; j++) {
+                    if(ttisnumber(arr.arr + j)) {
+                        lama_Number n = *numvalue(arr.arr + j);
+                        printf("%d ", n);
+                    } else {
+                        printf("- ");
+                    }
+                }
+                printf("]) ");
+            }
             else if(ttisfunction(refvalue(id)->ptr))
                 printf("(fun) ");
             else printf("(undef) ");;
@@ -391,6 +403,19 @@ void printglobals(lama_State *L) {
             printf("%d ", *numvalue(L->global_mem + i));
         } else if(ttisref(L->global_mem + i)) {
             FAIL;
+        } else if(ttisarray(L->global_mem + i)) {
+            printf("[");
+            lama_Array arr = *arrvalue(L->global_mem + i);
+
+            for(int j = 0; j < arr.n; j++) {
+                if(ttisnumber(arr.arr + j)) {
+                    lama_Number n = *numvalue(arr.arr + j);
+                    printf("%d ", n);
+                } else {
+                    printf("- ");
+                }
+            }
+            printf("] ");
         } else {
             printf("- ");
         }
@@ -567,15 +592,18 @@ void disassemble (FILE *f, bytefile *bf) {
                         //fprintf (f, "STA\n");
                         fflush(f);
 
-                        TValue v = *idx2StkId(L, 1);
+                        TValue v = *unref(idx2StkId(L, 1));
                         lama_Number i = *lama_tonumber(L, 2);
-                        TValue arr = *idx2StkId(L, 3);
+                        TValue arr = *unref(idx2StkId(L, 3));
                         lama_pop(L, 3);
                         if (ttisarray(&arr))
                             arr.value.arr.arr[i] = v;
                         else if (ttissexp(&arr))
                             arr.value.sexp.arr[i] = v;
-                        else
+                        else if (ttisstring(&arr)) {
+                            check(ttisnumber(&v));
+                            arr.value.str[i] = (char)v.value.num;
+                        } else
                             FAIL;
                         lama_pushTValue(L, v);
                         //*idx2StkId(L, 0) = v;
@@ -626,14 +654,16 @@ void disassemble (FILE *f, bytefile *bf) {
                         fflush(f);
 
                         lama_Number i = *lama_tonumber(L, 1);
-                        TValue* arr = idx2StkId(L, 2);
+                        TValue* arr = unref(idx2StkId(L, 2));
                         lama_pop(L, 2);
                         if (ttisarray(arr))
-                            lama_pushTValue(L, arr->value.arr.arr[i]);
+                            lama_pushref(L, lama_Ref{{0, 0}, arr->value.arr.arr + i});
+                            //lama_pushTValue(L, arr->value.arr.arr[i]);
                         else if (ttissexp(arr))
-                            lama_pushTValue(L, arr->value.sexp.arr[i]);
+                            lama_pushref(L, lama_Ref{{0, 0}, arr->value.sexp.arr + i});
+                            //lama_pushTValue(L, arr->value.sexp.arr[i]);
                         else
-                            FAIL;
+                            lama_pushnumber(L, (int)(*(arr->value.str + i)));
                         //incr_top(L);
                         break;
                     }
@@ -646,7 +676,7 @@ void disassemble (FILE *f, bytefile *bf) {
                 fflush(f);
 
                 lama_Loc loc = lama_Loc{INT, l};
-                check(!ttisarray(loc2adr(L, loc)) && !ttissexp(loc2adr(L, loc)));
+                //check(!ttisarray(loc2adr(L, loc)) && !ttissexp(loc2adr(L, loc)));
                 TValue *ptr = /*unref(*/loc2adr(L, loc)/*)*/;
                 lama_pushref(L, lama_Ref{loc, ptr});
                 break;
@@ -778,9 +808,10 @@ void disassemble (FILE *f, bytefile *bf) {
                         fflush(f);
 
                         int n;
-                        lama_Ref ref = *lama_toref(L, 1);
+                        //lama_Ref ref = *lama_toref(L, 1);
                         fscanf(stdin, "%d", &n);
-                        setnumvalue(ref.ptr, n);
+                        //setnumvalue(ref.ptr, n);
+                        lama_pushnumber(L, n);
                         break;
                     }
                     case 1: { //CALL Lwrite
@@ -797,12 +828,13 @@ void disassemble (FILE *f, bytefile *bf) {
                     case 2: { //CALL Llength
                         StkId id = unref(idx2StkId(L, 1));
                         //if (ttisref(id)) id = id->value.ref;
+                        lama_pop(L, 1);
                         if(ttisarray(id))
                             lama_pushnumber(L, id->value.arr.n);
                         else if(ttissexp(id))
                             lama_pushnumber(L, id->value.sexp.n);
                         else if(ttisstring(id))
-                            not_implemented;
+                            lama_pushnumber(L, (int)strlen(*strvalue(id)));
                         else
                             FAIL;
                         break;
