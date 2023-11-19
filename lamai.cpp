@@ -114,11 +114,18 @@ struct lama_Ref {
     TValue *ptr;
 };
 
+struct lama_Fun {
+    char *ip;
+    int n_caps;
+    TValue *caps;
+};
+
 typedef union{
     lama_Number num;
     lama_String str;
     lama_Array arr;
     lama_Sexp sexp;
+    lama_Fun fun;
     lama_Ref ref;
 } Value;
 
@@ -149,30 +156,38 @@ struct lama_State {
 
 #define check_exp(c,e)(e)
 
+typedef enum{
+    TT_NUM = 3,
+    TT_STR,
+    TT_ARR,
+    TT_SEXP,
+    TT_FUN,
+    TT_REF,
+    TT_N
+} TT_TYPES;
+
 #define ttype(o)((o)->tt)
-#define ttisnumber(o)(ttype(o)==3)
-#define ttisstring(o)(ttype(o)==4)
-#define ttisarray(o)(ttype(o)==5)
-#define ttissexp(o)(ttype(o)==6)
-#define ttisfunction(o)(ttype(o)==7)
-#define ttisref(o)(ttype(o)==8)
+#define ttisnumber(o)(ttype(o)==TT_NUM)
+#define ttisstring(o)(ttype(o)==TT_STR)
+#define ttisarray(o)(ttype(o)==TT_ARR)
+#define ttissexp(o)(ttype(o)==TT_SEXP)
+#define ttisfunction(o)(ttype(o)==TT_FUN)
+#define ttisref(o)(ttype(o)==TT_REF)
 
 #define numvalue(o)check_exp(ttisnumber(o),&(o)->value.num)
 #define strvalue(o)check_exp(ttisstring(o),&(o)->value.str)
-#define clvalue(o)check_exp(ttisfunction(o),&(o)->value.cl)
 #define arrvalue(o)check_exp(ttisarray(o),&(o)->value.arr)
 #define sexpvalue(o)check_exp(ttissexp(o),&(o)->value.sexp)
+#define funvalue(o)check_exp(ttisref(o),&(o)->value.fun)
 #define refvalue(o)check_exp(ttisref(o),&(o)->value.ref)
 
 #define cast(t,exp)((t)(exp))
-#define cast_num(i)cast(lama_Number,(i))
-
-#define lamaS_new(L,s)(lamaS_newlstr(L,s,strlen(s)))
 
 #define setnumvalue(obj,x){TValue*i_o=(obj);i_o->value.num=(x);i_o->tt=3;}
 #define setstrvalue(L,obj,x){TValue*i_o=(obj);i_o->value.str=(x);i_o->tt=4;}
 #define setarrvalue(L,obj,x){TValue*i_o=(obj);i_o->value.arr=(x);i_o->tt=5;}
 #define setsexpvalue(L,obj,x){TValue*i_o=(obj);i_o->value.sexp=(x);i_o->tt=6;}
+#define setfunvalue(L,obj,x){TValue*i_o=(obj);i_o->value.fun=(x);i_o->tt=7;}
 #define setrefvalue(L,obj,x){TValue*i_o=(obj);i_o->value.ref=(x);i_o->tt=8;}
 
 static void lama_reallocstack(lama_State *L, int newsize) {
@@ -300,6 +315,13 @@ static lama_String* lama_tostring(lama_State *L, int idx) {
     else FAIL;
 }
 
+static lama_Fun* lama_tofun(lama_State *L, int idx) {
+    TValue *o = unref(idx2StkId(L, idx));
+    if(ttisfunction(o))
+        return funvalue(o);
+    else FAIL;
+}
+
 static lama_Ref* lama_toref(lama_State *L, int idx) {
     TValue *o = idx2StkId(L, idx);
     if(ttisref(o))
@@ -329,6 +351,11 @@ static void lama_pushsexp(lama_State *L, lama_Sexp sexp) {
 
 static void lama_pushref(lama_State *L, lama_Ref ref) {
     setrefvalue(L, L->top, ref);
+    incr_top(L)
+}
+
+static void lama_pushfun(lama_State *L, lama_Fun fun) {
+    setfunvalue(L, L->top, fun);
     incr_top(L)
 }
 
@@ -470,23 +497,16 @@ void printargs(lama_State *L) {
 #define printargs(l) (void)0
 
 static void lama_begin(lama_State *L, int caps, int args, int locs, char *retip) {
-    //printstack(L);
-
     inc_ci(L)
     CallInfo *ci = L->ci;
     ci->retip = retip;
     ci->caps = caps;
     ci->args = args;
     ci->locs = locs;
-
     for(int i = 0; i < args; i++)
         *idx2StkId(L, i + 1) = *unref(idx2StkId(L, i + 1));
-
     lama_checkstack(L, locs)
     lama_settop(L, locs);
-
-    //printstack(L);
-
     StkId base = L->top;
     L->base = ci->base = base;
 }
@@ -501,16 +521,10 @@ static void lama_end(lama_State *L) {
     L->ip = L->ci->retip;
     --L->ci;
     L->base = L->ci->base;
-    //*idx2StkId(L, 0) = ret;
-    //incr_top(L)
     lama_pushTValue(L, ret);
 }
 
-/* Disassembles the bytecode pool */
-void disassemble (FILE *f, bytefile *bf) {
-
-
-    //char *ip = bf->code_ptr;
+void eval (FILE *f, bytefile *bf) {
     lama_State *L = new lama_State;
 
 #define INT (L->ip += sizeof (int), *(int*)(L->ip - sizeof (int)))
@@ -530,8 +544,8 @@ void disassemble (FILE *f, bytefile *bf) {
     L->ci->locs = L->ci->args = 0;
     L->ci->base = L->base;
 
-    char *retip = code_stop_ptr;
-    int caps, func_offset;
+    lama_pushnumber(L, 0);
+    lama_pushnumber(L, cast(int, code_stop_ptr));
 
     do {
         printstack(L);
@@ -710,11 +724,7 @@ void disassemble (FILE *f, bytefile *bf) {
                 fflush(f);
 
                 StkId id = unref(idx2StkId(L, 1));
-                //if (ttisref(id)) id = id->value.ref;
                 *loc2adr(L, lama_Loc{INT, l}) = *id;
-                //lama_pop(L, 1);
-                //printstack(L);
-                //printglobals(L);
                 break;
             }
             case 5:
@@ -743,8 +753,13 @@ void disassemble (FILE *f, bytefile *bf) {
                         //fprintf (f, "BEGIN\n");
                         fflush(f);
 
+                        char *ret_ip = cast(char*, *lama_tonumber(L, 1));
+                        int caps = *lama_tonumber(L, 2);
+                        check(caps == 0);
+                        lama_pop(L, 2);
+
                         int args = INT, locs = INT;
-                        lama_begin(L, 0, args, locs, retip);
+                        lama_begin(L, 0, args, locs, ret_ip);
                         break;
                     }
                     case 3: { //CBEGIN
@@ -752,21 +767,30 @@ void disassemble (FILE *f, bytefile *bf) {
                         //fprintf (f, "CBEGIN\n");
                         fflush(f);
 
+                        char *ret_ip = cast(char*, *lama_tonumber(L, 1));
+                        int caps = *lama_tonumber(L, 2);
+                        lama_pop(L, 2);
+
                         int args = INT, locs = INT;
-                        lama_begin(L, caps, args, locs, retip);
+                        lama_begin(L, caps, args, locs, ret_ip);
                         break;
                     }
                     case 4: { //CLOSURE
                         //fprintf (f, "CLOSURE\n");
                         fflush(f);
 
-                        func_offset = INT;
-                        caps = INT;
-                        for (int i = 0; i < caps; i++) {
+                        int func_offset = INT;
+                        int n_caps = INT;
+
+                        char *func_ptr = bf->code_ptr + func_offset;
+
+                        TValue *caps = allocArray(n_caps);
+                        for (int i = 0; i < n_caps; i++) {
                             char tt = BYTE;
                             int idx = INT;
-                            lama_pushTValue(L, *unref(loc2adr(L, lama_Loc{idx, tt})));
+                            caps[i] = *unref(loc2adr(L, lama_Loc{idx, tt}));
                         }
+                        lama_pushfun(L, lama_Fun{func_ptr, n_caps, caps});
                         break;
                     }
                     case 5: { //CALLC
@@ -776,11 +800,23 @@ void disassemble (FILE *f, bytefile *bf) {
 
                         int args = INT;
 
-                        char *func_ptr = bf->code_ptr + func_offset;
+                        lama_Fun fun = *lama_tofun(L, args + 1);
+
+                        for(int i = args; i > 0; i--) {
+                            *idx2StkId(L, i + 1) = *idx2StkId(L, i);
+                        }
+                        lama_pop(L, 1);
+
+                        for(int i = 0; i < fun.n_caps; i++)
+                            lama_pushTValue(L, fun.caps[i]);
+                        lama_pushnumber(L, fun.n_caps);
+
+                        char *func_ptr = fun.ip;
                         check(((*func_ptr & 0xF0) >> 4) == 5);
                         check((*func_ptr & 0x0F) == 2 || (*func_ptr & 0x0F) == 3);
 
-                        retip = L->ip;
+                        lama_pushnumber(L, (int)L->ip);
+
                         L->ip = func_ptr;
                         break;
                     }
@@ -788,13 +824,15 @@ void disassemble (FILE *f, bytefile *bf) {
                         //fprintf (f, "CALL\n");
                         fflush(f);
 
+                        lama_pushnumber(L, 0);
                         int func_offset = INT, args = INT;
 
                         char *func_ptr = bf->code_ptr + func_offset;
                         check(((*func_ptr & 0xF0) >> 4) == 5);
                         check((*func_ptr & 0x0F) == 2 || (*func_ptr & 0x0F) == 3);
 
-                        retip = L->ip;
+                        lama_pushnumber(L, (int)L->ip);
+
                         L->ip = func_ptr;
                         break;
                     }
@@ -990,29 +1028,13 @@ void disassemble (FILE *f, bytefile *bf) {
         }
         //fprintf (f, "\n");
     }
-    while (1);
-    stop: //fprintf (f, "<end>\n");
+    while (true);
+    stop:
     return;
-}
-
-/* Dumps the contents of the file */
-void dump_file (FILE *f, bytefile *bf) {
-    int i;
-
-    fprintf (f, "String table size       : %d\n", bf->stringtab_size);
-    fprintf (f, "Global area size        : %d\n", bf->global_area_size);
-    fprintf (f, "Number of public symbols: %d\n", bf->public_symbols_number);
-    fprintf (f, "Public symbols          :\n");
-
-    for (i=0; i < bf->public_symbols_number; i++)
-        fprintf (f, "   0x%.8x: %s\n", get_public_offset (bf, i), get_public_name (bf, i));
-
-    fprintf (f, "Code:\n");
-    disassemble (f, bf);
 }
 
 int main (int argc, char* argv[]) {
     bytefile *f = read_file (argv[1]);
-    dump_file (stdout, f);
+    eval (stdout, f);
     return 0;
 }
