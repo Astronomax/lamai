@@ -293,6 +293,13 @@ static lama_Array* lama_toarray(lama_State *L, int idx) {
     else FAIL;
 }
 
+static lama_String* lama_tostring(lama_State *L, int idx) {
+    TValue *o = unref(idx2StkId(L, idx));
+    if(ttisstring(o))
+        return strvalue(o);
+    else FAIL;
+}
+
 static lama_Ref* lama_toref(lama_State *L, int idx) {
     TValue *o = idx2StkId(L, idx);
     if(ttisref(o))
@@ -589,6 +596,7 @@ void disassemble (FILE *f, bytefile *bf) {
                         TValue *arr = allocArray(n);
                         for (int i = 0; i < n; i++)
                             arr[i] = *idx2StkId(L, n - i);
+                        lama_pop(L, n);
                         lama_pushsexp(L, lama_Sexp{n, name, arr});
                         break;
                     }
@@ -790,26 +798,49 @@ void disassemble (FILE *f, bytefile *bf) {
                         L->ip = func_ptr;
                         break;
                     }
-                    case 7:
-                        not_implemented;
-                        //fprintf (f, "TAG\t%s ", STRING);
+                    case 7: { //TAG
+                        char *name = STRING;
+                        int n = INT;
+                        StkId id = unref(idx2StkId(L, 1));
+                        lama_pop(L, 1);
+
+                        if(!ttissexp(id)) {
+                            lama_pushnumber(L, 0);
+                            break;
+                        }
+                        lama_Sexp *sexp = sexpvalue(id);
+                        if(strcmp(sexp->name, name) == 0 && sexp->n == n)
+                            lama_pushnumber(L, 1);
+                        else
+                            lama_pushnumber(L, 0);
+                        break;
+                        //fprintf (f, "TAG\t%name ", STRING);
                         //fprintf (f, "%d", INT);
+                    }
                     case 8: { //ARRAY
                         //fprintf (f, "ARRAY\n");
                         fflush(f);
 
                         int n = INT;
-                        lama_Array arr = {n, allocArray(n)};
-                        for (int i = 0; i < n; i++)
-                            arr.arr[i] = *idx2StkId(L, n - i);
-                        lama_pop(L, n);
-                        lama_pusharr(L, arr);
+                        StkId id = unref(idx2StkId(L, 1));
+                        lama_pop(L, 1);
+
+                        if(ttisarray(id) && arrvalue(id)->n == n)
+                            lama_pushnumber(L, 1);
+                        else
+                            lama_pushnumber(L, 0);
                         break;
                     }
-                    case 9:
-                        not_implemented;
+                    case 9: { //FAIL
+                        //not_implemented;
                         //fprintf (f, "FAIL\t%d", INT);
                         //fprintf (f, "%d", INT);
+                        int line = INT;
+                        int column = INT;
+                        fprintf(f, "*** FAILURE: match failure at test.lama:%d:%d, value 'A (A (Nil))'\n", line, column);
+                        fflush(f);
+                        exit(0);
+                    }
                     case 10: //LINE
                         //fprintf (f, "LINE\n");
                         fflush(f);
@@ -820,9 +851,85 @@ void disassemble (FILE *f, bytefile *bf) {
                         OPFAIL;
                 }
                 break;
-            case 6:
-                not_implemented;
-                //fprintf (f, "PATT\t%s", pats[l]);
+            case 6: { //PATT
+                //fprintf(f, "PATT\n");
+                fflush(f);
+
+                switch (l) {
+                    case 0: { //=str
+                        lama_String target = *lama_tostring(L, 1);
+                        StkId id = unref(idx2StkId(L, 2));
+                        lama_pop(L, 2);
+
+                        if(!ttisstring(id)) {
+                            lama_pushnumber(L, 0);
+                            break;
+                        }
+                        lama_String str = *strvalue(id);
+                        if(strcmp(str, target) == 0)
+                            lama_pushnumber(L, 1);
+                        else
+                            lama_pushnumber(L, 0);
+                        break;
+                    }
+                    case 1: { //#string
+                        StkId id = unref(idx2StkId(L, 1));
+                        lama_pop(L, 1);
+                        if(ttisstring(id))
+                            lama_pushnumber(L, 1);
+                        else
+                            lama_pushnumber(L, 0);
+                        break;
+                    }
+                    case 2: { //#array
+                        StkId id = unref(idx2StkId(L, 1));
+                        lama_pop(L, 1);
+                        if(ttisarray(id))
+                            lama_pushnumber(L, 1);
+                        else
+                            lama_pushnumber(L, 0);
+                        break;
+                    }
+                    case 3: { //#sexp
+                        StkId id = unref(idx2StkId(L, 1));
+                        lama_pop(L, 1);
+                        if(ttissexp(id))
+                            lama_pushnumber(L, 1);
+                        else
+                            lama_pushnumber(L, 0);
+                        break;
+                    }
+                    case 4: { //#ref
+                        StkId id = idx2StkId(L, 1);
+                        lama_pop(L, 1);
+                        if(ttisref(id))
+                            lama_pushnumber(L, 1);
+                        else
+                            lama_pushnumber(L, 0);
+                        break;
+                    }
+                    case 5: { //#val
+                        StkId id = idx2StkId(L, 1);
+                        lama_pop(L, 1);
+                        if(!ttisref(id))
+                            lama_pushnumber(L, 1);
+                        else
+                            lama_pushnumber(L, 0);
+                        break;
+                    }
+                    case 6: { //#fun
+                        StkId id = unref(idx2StkId(L, 1));
+                        lama_pop(L, 1);
+                        if(ttisfunction(id))
+                            lama_pushnumber(L, 1);
+                        else
+                            lama_pushnumber(L, 0);
+                        break;
+                    }
+                    default: OPFAIL;
+                }
+                break;
+            }
             case 7: {
                 switch (l) {
                     case 0: { //CALL Lread
@@ -866,11 +973,11 @@ void disassemble (FILE *f, bytefile *bf) {
                         //fprintf (f, "CALL\tLstring");
                     case 4: { //CALL Barray
                         int n = INT;
-                        lama_Array arr = {n, allocArray(n)};
+                        TValue *arr = allocArray(n);
                         for (int i = 0; i < n; i++)
-                            arr.arr[i] = *idx2StkId(L, n - i);
+                            arr[i] = *idx2StkId(L, n - i);
                         lama_pop(L, n);
-                        lama_pusharr(L, arr);
+                        lama_pusharr(L, lama_Array{n, arr});
                         break;
                     }
                     default:
