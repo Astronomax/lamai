@@ -135,9 +135,9 @@ struct TValue{
 };
 
 struct CallInfo {
-    int args, locs, caps;
+    int n_args, n_locs, n_caps;
     StkId base;
-    char *retip;
+    char *ret_ip;
 };
 
 struct lama_State {
@@ -157,22 +157,22 @@ struct lama_State {
 #define check_exp(c,e)(e)
 
 typedef enum{
-    TT_NUM = 3,
-    TT_STR,
-    TT_ARR,
-    TT_SEXP,
-    TT_FUN,
-    TT_REF,
-    TT_N
-} TT_TYPES;
+    TP_NUM = 3,
+    TP_STR,
+    TP_ARR,
+    TP_SEXP,
+    TP_FUN,
+    TP_REF,
+    TP_N
+} TYPES;
 
 #define ttype(o)((o)->tt)
-#define ttisnumber(o)(ttype(o)==TT_NUM)
-#define ttisstring(o)(ttype(o)==TT_STR)
-#define ttisarray(o)(ttype(o)==TT_ARR)
-#define ttissexp(o)(ttype(o)==TT_SEXP)
-#define ttisfunction(o)(ttype(o)==TT_FUN)
-#define ttisref(o)(ttype(o)==TT_REF)
+#define ttisnumber(o)(ttype(o)==TP_NUM)
+#define ttisstring(o)(ttype(o)==TP_STR)
+#define ttisarray(o)(ttype(o)==TP_ARR)
+#define ttissexp(o)(ttype(o)==TP_SEXP)
+#define ttisfunction(o)(ttype(o)==TP_FUN)
+#define ttisref(o)(ttype(o)==TP_REF)
 
 #define numvalue(o)check_exp(ttisnumber(o),&(o)->value.num)
 #define strvalue(o)check_exp(ttisstring(o),&(o)->value.str)
@@ -183,12 +183,12 @@ typedef enum{
 
 #define cast(t,exp)((t)(exp))
 
-#define setnumvalue(obj,x){TValue*i_o=(obj);i_o->value.num=(x);i_o->tt=3;}
-#define setstrvalue(L,obj,x){TValue*i_o=(obj);i_o->value.str=(x);i_o->tt=4;}
-#define setarrvalue(L,obj,x){TValue*i_o=(obj);i_o->value.arr=(x);i_o->tt=5;}
-#define setsexpvalue(L,obj,x){TValue*i_o=(obj);i_o->value.sexp=(x);i_o->tt=6;}
-#define setfunvalue(L,obj,x){TValue*i_o=(obj);i_o->value.fun=(x);i_o->tt=7;}
-#define setrefvalue(L,obj,x){TValue*i_o=(obj);i_o->value.ref=(x);i_o->tt=8;}
+#define setnumvalue(obj,x){TValue*i_o=(obj);i_o->value.num=(x);i_o->tt=TP_NUM;}
+#define setstrvalue(L,obj,x){TValue*i_o=(obj);i_o->value.str=(x);i_o->tt=TP_STR;}
+#define setarrvalue(L,obj,x){TValue*i_o=(obj);i_o->value.arr=(x);i_o->tt=TP_ARR;}
+#define setsexpvalue(L,obj,x){TValue*i_o=(obj);i_o->value.sexp=(x);i_o->tt=TP_SEXP;}
+#define setfunvalue(L,obj,x){TValue*i_o=(obj);i_o->value.fun=(x);i_o->tt=TP_FUN;}
+#define setrefvalue(L,obj,x){TValue*i_o=(obj);i_o->value.ref=(x);i_o->tt=TP_REF;}
 
 static void lama_reallocstack(lama_State *L, int newsize) {
     TValue *oldstack = L->stack;
@@ -248,7 +248,7 @@ typedef enum{
     LOC_A,
     LOC_C,
     LOC_N
-} LOCS;
+} n_locs;
 
 static void lama_settop(lama_State *L, int idx) {
     if(idx > 0)
@@ -268,22 +268,22 @@ static TValue *idx2StkId(lama_State *L, int idx) {
 static TValue *loc2adr(lama_State *L, lama_Loc loc) {
     int idx = loc.idx;
     check(idx >= 0);
-    int caps = L->ci->caps;
-    int args = L->ci->args;
-    int locs = L->ci->locs;
+    int n_caps = L->ci->n_caps;
+    int n_args = L->ci->n_args;
+    int n_locs = L->ci->n_locs;
     switch (loc.tt) {
         case LOC_G:
             check(idx < 10000);
             return L->global_mem + idx;
         case LOC_L:
-            check(idx < locs);
-            return L->base - locs + idx;
+            check(idx < n_locs);
+            return L->base - n_locs + idx;
         case LOC_A:
-            check(idx < args);
-            return L->base - (args + locs) + idx;
+            check(idx < n_args);
+            return L->base - (n_caps + n_args + n_locs) + idx;
         case LOC_C:
-            check(idx < caps);
-            return L->base - (caps + args + locs) + idx;
+            check(idx < n_caps);
+            return L->base - (n_caps + n_locs) + idx;
         default: FAIL;
     }
 }
@@ -389,42 +389,69 @@ void printstack(lama_State *L) {
     for (int i = 0; i < L->top - L->base; i++) {
         int idx = L->top - L->base - i;
         StkId id = idx2StkId(L, idx);
-        if(ttisnumber(id)) {
+        if (ttisnumber(id)) {
             lama_Number n = *lama_tonumber(L, idx);
             printf("%d ", n);
-        } else if(ttisref(id)) {
-            switch(refvalue(id)->loc.tt) {
-                case LOC_G: printf("G(%d) ", refvalue(id)->loc.idx); break;
-                case LOC_L: printf("L(%d) ", refvalue(id)->loc.idx); break;
-                case LOC_A: printf("A(%d) ", refvalue(id)->loc.idx); break;
-                case LOC_C: printf("C(%d) ", refvalue(id)->loc.idx); break;
-                default: FAIL;
+        } else if (ttisref(id)) {
+            switch (refvalue(id)->loc.tt) {
+                case LOC_G:
+                    printf("G(%d) ", refvalue(id)->loc.idx);
+                    break;
+                case LOC_L:
+                    printf("L(%d) ", refvalue(id)->loc.idx);
+                    break;
+                case LOC_A:
+                    printf("A(%d) ", refvalue(id)->loc.idx);
+                    break;
+                case LOC_C:
+                    printf("C(%d) ", refvalue(id)->loc.idx);
+                    break;
+                default:
+                    FAIL;
             }
             if (ttisnumber(refvalue(id)->ptr))
                 printf("(num) ");
-            else if(ttisstring(refvalue(id)->ptr))
+            else if (ttisstring(refvalue(id)->ptr))
                 printf("(str) ");
-            else if(ttisref(refvalue(id)->ptr))
+            else if (ttisref(refvalue(id)->ptr))
                 printf("(ref) ");
-            else if(ttissexp(refvalue(id)->ptr))
+            else if (ttissexp(refvalue(id)->ptr))
                 printf("(sexp) ");
-            else if(ttisarray(refvalue(id)->ptr)) {
+            else if (ttisarray(refvalue(id)->ptr)) {
                 printf("(arr: [");
                 lama_Array arr = *arrvalue(refvalue(id)->ptr);
 
-                for(int j = 0; j < arr.n; j++) {
-                    if(ttisnumber(arr.arr + j)) {
+                for (int j = 0; j < arr.n; j++) {
+                    if (ttisnumber(arr.arr + j)) {
                         lama_Number n = *numvalue(arr.arr + j);
                         printf("%d ", n);
+                    } else if(ttisfunction(arr.arr + j)) {
+                        printf("(fun) ");
                     } else {
                         printf("- ");
                     }
                 }
                 printf("]) ");
-            }
-            else if(ttisfunction(refvalue(id)->ptr))
+            } else if (ttisfunction(refvalue(id)->ptr))
                 printf("(fun) ");
-            else printf("(undef) ");;
+            else printf("(undef) ");
+        } else if (ttisfunction(id)) {
+            printf("(fun) ");
+        } else if (ttisarray(id)) {
+            printf("(arr: [");
+            lama_Array arr = *arrvalue(id);
+
+            for (int j = 0; j < arr.n; j++) {
+                if (ttisnumber(arr.arr + j)) {
+                    lama_Number n = *numvalue(arr.arr + j);
+                    printf("%d ", n);
+                } else if(ttisfunction(arr.arr + j)) {
+                    printf("(fun) ");
+                } else {
+                    printf("- ");
+                }
+            }
+            printf("]) ");
         } else {
             printf("- ");
         }
@@ -447,6 +474,8 @@ void printglobals(lama_State *L) {
                 if(ttisnumber(arr.arr + j)) {
                     lama_Number n = *numvalue(arr.arr + j);
                     printf("%d ", n);
+                } else if(ttisfunction(arr.arr + j)) {
+                    printf("(fun) ");
                 } else {
                     printf("- ");
                 }
@@ -461,23 +490,45 @@ void printglobals(lama_State *L) {
 
 void printlocals(lama_State *L) {
     printf("locals\n");
-    for (int i = 0; i < L->ci->locs; i++) {
+    for (int i = 0; i < L->ci->n_locs; i++) {
         lama_Loc loc = lama_Loc{i, LOC_L};
-        TValue *ptr = loc2adr(L, loc);
-        if(ttisnumber(ptr)) {
-            printf("%d ", *numvalue(ptr));
-        } else if(ttisref(ptr)) {
+        TValue *id = loc2adr(L, loc);
+        if(ttisnumber(id)) {
+            printf("%d ", *numvalue(id));
+        } else if (ttisnumber(id))
+            printf("(num) ");
+        else if(ttisstring(id))
+            printf("(str) ");
+        else if(ttisref(id))
             FAIL;
-        } else {
-            printf("- ");
+        else if(ttissexp(id))
+            printf("(sexp) ");
+        else if(ttisarray(id)) {
+            printf("(arr: [");
+            lama_Array arr = *arrvalue(id);
+
+            for(int j = 0; j < arr.n; j++) {
+                if(ttisnumber(arr.arr + j)) {
+                    lama_Number n = *numvalue(arr.arr + j);
+                    printf("%d ", n);
+                } else if(ttisfunction(arr.arr + j)) {
+                    printf("(fun) ");
+                } else {
+                    printf("- ");
+                }
+            }
+            printf("]) ");
         }
+        else if(ttisfunction(id))
+            printf("(fun) ");
+        else printf("(undef) ");
     }
     printf("\n");
 }
 
 void printargs(lama_State *L) {
     printf("args\n");
-    for (int i = 0; i < L->ci->args; i++) {
+    for (int i = 0; i < L->ci->n_args; i++) {
         lama_Loc loc = lama_Loc{i, LOC_A};
         TValue *ptr = loc2adr(L, loc);
         if(ttisnumber(ptr)) {
@@ -496,29 +547,33 @@ void printargs(lama_State *L) {
 #define printlocals(l) (void)0
 #define printargs(l) (void)0
 
-static void lama_begin(lama_State *L, int caps, int args, int locs, char *retip) {
+static void lama_begin(lama_State *L, int n_caps, int n_args, int n_locs, char *retip) {
     inc_ci(L)
     CallInfo *ci = L->ci;
-    ci->retip = retip;
-    ci->caps = caps;
-    ci->args = args;
-    ci->locs = locs;
-    for(int i = 0; i < args; i++)
-        *idx2StkId(L, i + 1) = *unref(idx2StkId(L, i + 1));
-    lama_checkstack(L, locs)
-    lama_settop(L, locs);
+    ci->ret_ip = retip;
+    ci->n_caps = n_caps;
+    ci->n_args = n_args;
+    ci->n_locs = n_locs;
+    for(int i = 0; i < n_args; i++)
+        *idx2StkId(L, n_caps + i + 1) = *unref(idx2StkId(L, n_caps + i + 1));
+    lama_checkstack(L, n_locs)
+    lama_settop(L, n_locs);
+
+    for(int i = 0; i < n_locs; i++)
+        (L->top - i - 1)->tt = 0;
+
     StkId base = L->top;
     L->base = ci->base = base;
 }
 
 static void lama_end(lama_State *L) {
     TValue ret = *unref(idx2StkId(L, 1));
-    int caps = L->ci->caps;
-    int args = L->ci->args;
-    int locs = L->ci->locs;
+    int n_caps = L->ci->n_caps;
+    int n_args = L->ci->n_args;
+    int n_locs = L->ci->n_locs;
     check((L->top - L->base) == 1);
-    L->top -= caps + args + locs + 1;
-    L->ip = L->ci->retip;
+    L->top -= n_caps + n_args + n_locs + 1;
+    L->ip = L->ci->ret_ip;
     --L->ci;
     L->base = L->ci->base;
     lama_pushTValue(L, ret);
@@ -541,7 +596,7 @@ void eval (FILE *f, bytefile *bf) {
     L->end_ci = L->ci + 10000;
     L->stack_last = L->stack + 10000;
     lama_settop(L, 2);
-    L->ci->locs = L->ci->args = 0;
+    L->ci->n_locs = L->ci->n_args = 0;
     L->ci->base = L->base;
 
     lama_pushnumber(L, 0);
@@ -568,7 +623,6 @@ void eval (FILE *f, bytefile *bf) {
                 check(ttisnumber(rb));
                 nb = *numvalue(rb);
                 lama_pop(L, 2);
-                //TValue *ra = idx2StkId(L, 0);
                 switch (l) {
                     case OP_ADD:    lama_pushnumber(L, lama_numadd(nb,nc)); break;
                     case OP_SUB:    lama_pushnumber(L, lama_numsub(nb,nc)); break;
@@ -585,8 +639,6 @@ void eval (FILE *f, bytefile *bf) {
                     case OP_OR:     lama_pushnumber(L, lama_numor(nb,nc));  break;
                     default: OPFAIL;
                 }
-                //incr_top(L)
-                //printstack(L);
                 break;
             }
             case 1:
@@ -596,7 +648,6 @@ void eval (FILE *f, bytefile *bf) {
                         fflush(f);
 
                         lama_pushnumber(L, INT);
-                        //printstack(L);
                         break;
                     case 1: //STRING
                         //fprintf (f, "STRING\n");
@@ -615,7 +666,7 @@ void eval (FILE *f, bytefile *bf) {
                         break;
                     }
                     case 3: //STI
-                        not_implemented;
+                        OPFAIL;
                     case 4: { //STA
                         //fprintf (f, "STA\n");
                         fflush(f);
@@ -634,8 +685,6 @@ void eval (FILE *f, bytefile *bf) {
                         } else
                             FAIL;
                         lama_pushTValue(L, v);
-                        //*idx2StkId(L, 0) = v;
-                        //incr_top(L);
                         break;
                     }
                     case 5: { //JMP
@@ -652,9 +701,8 @@ void eval (FILE *f, bytefile *bf) {
 
                         lama_end(L);
                         break;
-                    case 7:
-                        not_implemented;
-                        fprintf (f, "RET");
+                    case 7: //RET
+                        OPFAIL;
                     case 8: //DROP
                         //fprintf (f, "DROP\n");
                         fflush(f);
@@ -665,15 +713,12 @@ void eval (FILE *f, bytefile *bf) {
                         //fprintf (f, "DUP\n");
                         fflush(f);
 
-                        //*idx2StkId(L, 0) = *idx2StkId(L, 1);
-                        //incr_top(L)
                         lama_pushTValue(L, *idx2StkId(L, 1));
                         break;
                     case 10: { //SWAP
                         //fprintf (f, "SWAP\n");
                         fflush(f);
 
-                        //StkId a = idx2StkId(L, 1), b = idx2StkId(L, 2);
                         std::swap(*idx2StkId(L, 1), *idx2StkId(L, 2));
                         break;
                     }
@@ -686,13 +731,10 @@ void eval (FILE *f, bytefile *bf) {
                         lama_pop(L, 2);
                         if (ttisarray(arr))
                             lama_pushref(L, lama_Ref{{0, 0}, arr->value.arr.arr + i});
-                            //lama_pushTValue(L, arr->value.arr.arr[i]);
                         else if (ttissexp(arr))
                             lama_pushref(L, lama_Ref{{0, 0}, arr->value.sexp.arr + i});
-                            //lama_pushTValue(L, arr->value.sexp.arr[i]);
                         else
                             lama_pushnumber(L, (int)(arr->value.str[i]));
-                        //incr_top(L);
                         break;
                     }
                     default:
@@ -705,7 +747,7 @@ void eval (FILE *f, bytefile *bf) {
 
                 lama_Loc loc = lama_Loc{INT, l};
                 //check(!ttisarray(loc2adr(L, loc)) && !ttissexp(loc2adr(L, loc)));
-                TValue *ptr = /*unref(*/loc2adr(L, loc)/*)*/;
+                TValue *ptr = loc2adr(L, loc);
                 lama_pushref(L, lama_Ref{loc, ptr});
                 break;
             }
@@ -715,7 +757,7 @@ void eval (FILE *f, bytefile *bf) {
 
                 lama_Loc loc = lama_Loc{INT, l};
                 check(ttisarray(loc2adr(L, loc)) || ttissexp(loc2adr(L, loc)));
-                TValue *ptr = /*unref(*/loc2adr(L, loc)/*)*/;
+                TValue *ptr = loc2adr(L, loc);
                 lama_pushref(L, lama_Ref{loc, ptr});
                 break;
             }
@@ -723,8 +765,7 @@ void eval (FILE *f, bytefile *bf) {
                 //fprintf (f, "ST\n");
                 fflush(f);
 
-                StkId id = unref(idx2StkId(L, 1));
-                *loc2adr(L, lama_Loc{INT, l}) = *id;
+                *loc2adr(L, lama_Loc{INT, l}) = *unref(idx2StkId(L, 1));
                 break;
             }
             case 5:
@@ -732,8 +773,8 @@ void eval (FILE *f, bytefile *bf) {
                     case 0: { //CJMPz
                         //fprintf (f, "CJMPz\n");
                         fflush(f);
-                        StkId id = unref(idx2StkId(L, 1));
-                        lama_Number n = *numvalue(id);
+                        //StkId id = unref(idx2StkId(L, 1));
+                        lama_Number n = *lama_tonumber(L, 1);
                         lama_pop(L, 1);
                         int addr = INT;
                         if(n == 0) L->ip = bf->code_ptr + addr;
@@ -742,8 +783,8 @@ void eval (FILE *f, bytefile *bf) {
                     case 1: { //CJMPnz
                         //fprintf (f, "CJMPnz\n");
                         fflush(f);
-                        StkId id = unref(idx2StkId(L, 1));
-                        lama_Number n = *numvalue(id);
+                        //StkId id = unref(idx2StkId(L, 1));
+                        lama_Number n = *lama_tonumber(L, 1);
                         lama_pop(L, 1);
                         int addr = INT;
                         if(n != 0) L->ip = bf->code_ptr + addr;
@@ -754,25 +795,24 @@ void eval (FILE *f, bytefile *bf) {
                         fflush(f);
 
                         char *ret_ip = cast(char*, *lama_tonumber(L, 1));
-                        int caps = *lama_tonumber(L, 2);
-                        check(caps == 0);
+                        int n_caps = *lama_tonumber(L, 2);
+                        check(n_caps == 0);
                         lama_pop(L, 2);
 
-                        int args = INT, locs = INT;
-                        lama_begin(L, 0, args, locs, ret_ip);
+                        int n_args = INT, n_locs = INT;
+                        lama_begin(L, 0, n_args, n_locs, ret_ip);
                         break;
                     }
                     case 3: { //CBEGIN
-                        //not_implemented;
                         //fprintf (f, "CBEGIN\n");
                         fflush(f);
 
                         char *ret_ip = cast(char*, *lama_tonumber(L, 1));
-                        int caps = *lama_tonumber(L, 2);
+                        int n_caps = *lama_tonumber(L, 2);
                         lama_pop(L, 2);
 
-                        int args = INT, locs = INT;
-                        lama_begin(L, caps, args, locs, ret_ip);
+                        int n_args = INT, n_locs = INT;
+                        lama_begin(L, n_caps, n_args, n_locs, ret_ip);
                         break;
                     }
                     case 4: { //CLOSURE
@@ -794,44 +834,40 @@ void eval (FILE *f, bytefile *bf) {
                         break;
                     }
                     case 5: { //CALLC
-                        //not_implemented;
                         //fprintf (f, "CALLC\n");
                         fflush(f);
 
-                        int args = INT;
+                        int n_args = INT;
+                        lama_Fun fun = *lama_tofun(L, n_args + 1);
 
-                        lama_Fun fun = *lama_tofun(L, args + 1);
-
-                        for(int i = args; i > 0; i--) {
+                        for(int i = n_args; i > 0; i--) {
                             *idx2StkId(L, i + 1) = *idx2StkId(L, i);
                         }
                         lama_pop(L, 1);
 
                         for(int i = 0; i < fun.n_caps; i++)
                             lama_pushTValue(L, fun.caps[i]);
-                        lama_pushnumber(L, fun.n_caps);
+                        lama_pushnumber(L, fun.n_caps); //n_caps
+                        lama_pushnumber(L, (int)L->ip); //ret_ip
 
-                        char *func_ptr = fun.ip;
-                        check(((*func_ptr & 0xF0) >> 4) == 5);
-                        check((*func_ptr & 0x0F) == 2 || (*func_ptr & 0x0F) == 3);
-
-                        lama_pushnumber(L, (int)L->ip);
-
-                        L->ip = func_ptr;
+                        check(((*fun.ip & 0xF0) >> 4) == 5);
+                        check((*fun.ip & 0x0F) == 2 || (*fun.ip & 0x0F) == 3);
+                        L->ip = fun.ip;
                         break;
                     }
                     case 6: { //CALL
                         //fprintf (f, "CALL\n");
                         fflush(f);
 
-                        lama_pushnumber(L, 0);
-                        int func_offset = INT, args = INT;
+
+                        int func_offset = INT, n_args = INT;
 
                         char *func_ptr = bf->code_ptr + func_offset;
                         check(((*func_ptr & 0xF0) >> 4) == 5);
                         check((*func_ptr & 0x0F) == 2 || (*func_ptr & 0x0F) == 3);
 
-                        lama_pushnumber(L, (int)L->ip);
+                        lama_pushnumber(L, 0); //n_caps
+                        lama_pushnumber(L, (int)L->ip); //ret_ip
 
                         L->ip = func_ptr;
                         break;
@@ -870,7 +906,6 @@ void eval (FILE *f, bytefile *bf) {
                         break;
                     }
                     case 9: { //FAIL
-                        //not_implemented;
                         //fprintf (f, "FAIL\t%d", INT);
                         //fprintf (f, "%d", INT);
                         int line = INT;
@@ -975,9 +1010,7 @@ void eval (FILE *f, bytefile *bf) {
                         fflush(f);
 
                         int n;
-                        //lama_Ref ref = *lama_toref(L, 1);
                         fscanf(stdin, "%d", &n);
-                        //setnumvalue(ref.ptr, n);
                         lama_pushnumber(L, n);
                         break;
                     }
@@ -986,15 +1019,12 @@ void eval (FILE *f, bytefile *bf) {
                         fflush(f);
 
                         StkId id = unref(idx2StkId(L, 1));
-                        //if (ttisref(id)) id = id->value.ref;
-                        //check(ttisnumber(id));
                         fprintf(stdout, "%d\n", *numvalue(id));
-                        //printstack(L);
                         break;
                     }
                     case 2: { //CALL Llength
                         StkId id = unref(idx2StkId(L, 1));
-                        //if (ttisref(id)) id = id->value.ref;
+
                         lama_pop(L, 1);
                         if(ttisarray(id))
                             lama_pushnumber(L, id->value.arr.n);
@@ -1006,14 +1036,13 @@ void eval (FILE *f, bytefile *bf) {
                             FAIL;
                         break;
                     }
-                    case 3:
+                    case 3: //CALL Lstring
                         not_implemented;
-                        //fprintf (f, "CALL\tLstring");
                     case 4: { //CALL Barray
                         int n = INT;
                         TValue *arr = allocArray(n);
                         for (int i = 0; i < n; i++)
-                            arr[i] = *idx2StkId(L, n - i);
+                            arr[i] = *unref(idx2StkId(L, n - i));
                         lama_pop(L, n);
                         lama_pusharr(L, lama_Array{n, arr});
                         break;
