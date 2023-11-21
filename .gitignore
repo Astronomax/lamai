@@ -1,7 +1,9 @@
 *.a
 *.o
+*.i
+*.s
+*.lama
+*.bc
 /cmake-build-debug
 .idea
-/runtime/*.a
-/runtime/*.o
 lamai

@@ -1,11 +1,11 @@
-CPP=g++
 FLAGS=-m32 -g2 -fstack-protector-all
 
-all: lamai.o
-	$(CPP) $(FLAGS) -o lamai lamai.o runtime/runtime.a
-
-lamai.o: lamai.cpp
-	$(CPP) $(FLAGS) -g -c lamai.cpp
-
-clean:
-	$(RM) *.a *.o *~ lamai
+all: lamai
+obj/runtime.o: runtime/runtime.c
+	mkdir -p obj
+	$(CC) $(FLAGS) -c runtime/runtime.c -o obj/runtime.o -I runtime
+obj/lamai.o: lamai.c
+	mkdir -p obj
+	$(CC) $(FLAGS) -c lamai.c -o obj/lamai.o
+lamai: obj/runtime.o obj/lamai.o
+	$(CC) $(FLAGS) obj/runtime.o obj/lamai.o -o lamai
