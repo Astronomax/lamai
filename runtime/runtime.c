@@ -3,7 +3,6 @@
 #define _GNU_SOURCE 1
 
 # include <stdio.h>
-# include <stdio.h>
 # include <string.h>
 # include <stdarg.h>
 # include <stdlib.h>
@@ -20,10 +19,6 @@
 # ifndef __ENABLE_GC__
 # define alloc malloc
 # endif
-
-//#define alloc malloc
-
-# define WORD_SIZE (CHAR_BIT * sizeof(int))
 
 /* # define DEBUG_PRINT 1 */
 
@@ -67,24 +62,9 @@ void __post_gc_subst () {}
 # endif
 /* end */
 
-//# define STRING_TAG  0x00000001
-//# define ARRAY_TAG   0x00000003
-//# define SEXP_TAG    0x00000005
-//# define CLOSURE_TAG 0x00000007
-//# define UNBOXED_TAG 0x00000009 // Not actually a tag; used to return from LkindOf
-//
-//# define LEN(x) ((x & 0xFFFFFFF8) >> 3)
-//# define TAG(x)  (x & 0x00000007)
-//
-//# define TO_DATA(x) ((data*)((char*)(x)-sizeof(int)))
-//# define TO_SEXP(x) ((sexp*)((char*)(x)-2*sizeof(int)))
 #ifdef DEBUG_PRINT // GET_SEXP_TAG is necessary for printing from space
 # define GET_SEXP_TAG(x) (LEN(x))
 #endif
-
-//# define UNBOXED(x)  (((int) (x)) &  0x0001)
-//# define UNBOX(x)    (((int) (x)) >> 1)
-//# define BOX(x)      ((((int) (x)) << 1) | 0x0001)
 
 /* GC extra roots */
 #define MAX_EXTRA_ROOTS_NUMBER 16
@@ -222,7 +202,7 @@ extern int LcompareTags (void *p, void *q) {
 void* Ls__Infix_58 (void *p, void *q) {
   void *res;
   
-  //__pre_gc ();
+  __pre_gc ();
 
   push_extra_root(&p);
   push_extra_root(&q);
@@ -230,7 +210,7 @@ void* Ls__Infix_58 (void *p, void *q) {
   pop_extra_root(&q);
   pop_extra_root(&p);
 
-  //__post_gc ();
+  __post_gc ();
 
   return res;
 }
@@ -465,10 +445,10 @@ extern void printValue (void *p) {
   int i   = BOX(0);
   if (UNBOXED(p)) printStringBuf ("%d", UNBOX(p));
   else {
-    //if (! is_valid_heap_pointer(p)) {
-    //  printStringBuf ("0x%x", p);
-    //  return;
-    //}
+    if (! is_valid_heap_pointer(p)) {
+      printStringBuf ("0x%x", p);
+      return;
+    }
     
     a = TO_DATA(p);
 
@@ -609,17 +589,17 @@ extern void* Lsubstring (void *subj, int p, int l) {
   if (pp + ll <= LEN(d->tag)) {
     data *r;
     
-    //__pre_gc ();
+    __pre_gc ();
 
     push_extra_root (&subj);
-    r = (data*) malloc (ll + 1 + sizeof (int));
+    r = (data*) alloc (ll + 1 + sizeof (int));
     pop_extra_root (&subj);
 
     r->tag = STRING_TAG | (ll << 3);
 
     strncpy (r->contents, (char*) subj + pp, ll);
     
-    //__post_gc ();
+    __post_gc ();
 
     return r->contents;    
   }
@@ -670,7 +650,7 @@ void *Lclone (void *p) {
   indent++; print_indent ();
   printf ("Lclone arg: %p %p\n", &p, p); fflush (stdout);
 #endif
-  //__pre_gc ();
+  __pre_gc ();
   
   if (UNBOXED(p)) return p;
   else {
@@ -697,7 +677,7 @@ void *Lclone (void *p) {
       print_indent ();
       printf ("Lclone: closure or array &p=%p p=%p ebp=%p\n", &p, p, ebp); fflush (stdout);
 #endif
-      obj = (data*) malloc (sizeof(int) * (l+1));
+      obj = (data*) alloc (sizeof(int) * (l+1));
       memcpy (obj, TO_DATA(p), sizeof(int) * (l+1));
       res = (void*) (obj->contents);
       break;
@@ -706,7 +686,7 @@ void *Lclone (void *p) {
 #ifdef DEBUG_PRINT
       print_indent (); printf ("Lclone: sexp\n"); fflush (stdout);
 #endif
-      sobj = (sexp*) malloc (sizeof(int) * (l+2));
+      sobj = (sexp*) alloc (sizeof(int) * (l+2));
       memcpy (sobj, TO_SEXP(p), sizeof(int) * (l+2));
       res = (void*) sobj->contents.contents;
       break;
@@ -720,7 +700,7 @@ void *Lclone (void *p) {
   print_indent (); printf ("Lclone ends1\n"); fflush (stdout);
 #endif
 
-  //__post_gc ();
+  __post_gc ();
 #ifdef DEBUG_PRINT
   print_indent ();
   printf ("Lclone ends2\n"); fflush (stdout);
@@ -898,16 +878,16 @@ extern void* LmakeArray (int length) {
 
   ASSERT_UNBOXED("makeArray:1", length);
   
-  //__pre_gc ();
+  __pre_gc ();
 
   n = UNBOX(length);
-  r = (data*) malloc (sizeof(int) * (n+1));
+  r = (data*) alloc (sizeof(int) * (n+1));
 
   r->tag = ARRAY_TAG | (n << 3);
 
   memset (r->contents, 0, n * sizeof(int));
   
-  //__post_gc ();
+  __post_gc ();
 
   return r->contents;
 }
@@ -925,15 +905,15 @@ extern void* LmakeSexp (int bn, int btag) {
 
     int n = UNBOX(bn);
 
-    //__pre_gc () ;
+    __pre_gc () ;
 
-    r = (sexp*) malloc (sizeof(int) * (n+1));
+    r = (sexp*) alloc (sizeof(int) * (n+1));
     d = &(r->contents);
 
     d->tag = SEXP_TAG | ((n-1) << 3);
     r->tag = UNBOX(btag);
 
-    //__post_gc();
+    __post_gc();
 
     return d->contents;
 }
@@ -944,13 +924,13 @@ extern void* LmakeString (int length) {
 
   ASSERT_UNBOXED("makeString", length);
   
-  //__pre_gc () ;
+  __pre_gc () ;
   
-  r = (data*) malloc (n + 1 + sizeof (int));
+  r = (data*) alloc (n + 1 + sizeof (int));
 
   r->tag = STRING_TAG | (n << 3);
 
-  //__post_gc();
+  __post_gc();
   
   return r->contents;
 }
@@ -960,13 +940,13 @@ extern void* LMakeClosure (int bn, void *entry) {
     data    *r;
     int     n = UNBOX(bn);
 
-    //__pre_gc ();
+    __pre_gc ();
 
-    r = (data*) malloc (sizeof(int) * (n+2));
+    r = (data*) alloc (sizeof(int) * (n+2));
     r->tag = CLOSURE_TAG | ((n + 1) << 3);
     ((void**) r->contents)[0] = entry;
 
-    //__post_gc();
+    __post_gc();
 
     return r->contents;
 }
@@ -975,7 +955,7 @@ extern void* Bstring (void *p) {
   int   n = strlen (p);
   void *s = NULL;
   
-  //__pre_gc ();
+  __pre_gc ();
 #ifdef DEBUG_PRINT
   indent++; print_indent ();
   printf ("Bstring: call LmakeString %s %p %p %p %i\n", p, &p, p, s, n);
@@ -994,7 +974,7 @@ extern void* Bstring (void *p) {
   printf ("\tBstring: ends\n"); fflush(stdout);
   indent--;
 #endif
-  //__post_gc ();
+  __post_gc ();
   
   return s;
 }
@@ -1015,7 +995,7 @@ extern void* Lstringcat (void *p) {
   
   deleteStringBuf ();
 
-  //__post_gc ();
+  __post_gc ();
 
   return s;  
 }
@@ -1023,7 +1003,7 @@ extern void* Lstringcat (void *p) {
 extern void* Bstringval (void *p) {
   void *s = (void *) BOX (NULL);
 
-  //__pre_gc () ;
+  __pre_gc () ;
   
   createStringBuf ();
   printValue (p);
@@ -1035,7 +1015,7 @@ extern void* Bstringval (void *p) {
   
   deleteStringBuf ();
 
-  //__post_gc ();
+  __post_gc ();
 
   return s;
 }
@@ -1048,7 +1028,7 @@ extern void* Bclosure (int bn, void *entry, ...) {
   data    *r; 
   int     n = UNBOX(bn);
   
-  //__pre_gc ();
+  __pre_gc ();
 #ifdef DEBUG_PRINT
   indent++; print_indent ();
   printf ("Bclosure: create n = %d\n", n); fflush(stdout);
@@ -1058,7 +1038,7 @@ extern void* Bclosure (int bn, void *entry, ...) {
     push_extra_root ((void**)argss);
   }
 
-  r = (data*) malloc (sizeof(int) * (n+2));
+  r = (data*) alloc (sizeof(int) * (n+2));
   
   r->tag = CLOSURE_TAG | ((n + 1) << 3);
   ((void**) r->contents)[0] = entry;
@@ -1072,7 +1052,7 @@ extern void* Bclosure (int bn, void *entry, ...) {
   
   va_end(args);
 
-  //__post_gc();
+  __post_gc();
 
   argss--;
   for (i = 0; i<n; i++, argss--) {
@@ -1094,13 +1074,13 @@ extern void* Barray (int bn, ...) {
   data    *r; 
   int     n = UNBOX(bn);
     
-  //__pre_gc ();
+  __pre_gc ();
   
 #ifdef DEBUG_PRINT
   indent++; print_indent ();
   printf ("Barray: create n = %d\n", n); fflush(stdout);
 #endif
-  r = (data*) malloc (sizeof(int) * (n+1));
+  r = (data*) alloc (sizeof(int) * (n+1));
 
   r->tag = ARRAY_TAG | (n << 3);
   
@@ -1113,7 +1093,7 @@ extern void* Barray (int bn, ...) {
   
   va_end(args);
 
-  //__post_gc();
+  __post_gc();
 #ifdef DEBUG_PRINT
   indent--;
 #endif
@@ -1129,13 +1109,13 @@ extern void* Bsexp (int bn, ...) {
   data   *d;  
   int n = UNBOX(bn); 
 
-  //__pre_gc () ;
+  __pre_gc () ;
   
 #ifdef DEBUG_PRINT
   indent++; print_indent ();
   printf("Bsexp: allocate %zu!\n",sizeof(int) * (n+1)); fflush (stdout);
 #endif
-  r = (sexp*) malloc (sizeof(int) * (n+1));
+  r = (sexp*) alloc (sizeof(int) * (n+1));
   d = &(r->contents);
   r->tag = 0;
     
@@ -1161,7 +1141,7 @@ extern void* Bsexp (int bn, ...) {
 
   va_end(args);
 
-  //__post_gc();
+  __post_gc();
 
   return d->contents;
 }
@@ -1297,11 +1277,11 @@ extern void* /*Lstrcat*/ Li__Infix_4343 (void *a, void *b) {
   da = TO_DATA(a);
   db = TO_DATA(b);
 
-  //__pre_gc () ;
+  __pre_gc () ;
 
   push_extra_root (&a);
   push_extra_root (&b);
-  d  = (data *) malloc (sizeof(int) + LEN(da->tag) + LEN(db->tag) + 1);
+  d  = (data *) alloc (sizeof(int) + LEN(da->tag) + LEN(db->tag) + 1);
   pop_extra_root (&b);
   pop_extra_root (&a);
 
@@ -1315,7 +1295,7 @@ extern void* /*Lstrcat*/ Li__Infix_4343 (void *a, void *b) {
   
   d->contents[LEN(da->tag) + LEN(db->tag)] = 0;
 
-  //__post_gc();
+  __post_gc();
   
   return d->contents;
 }
@@ -1333,13 +1313,13 @@ extern void* Lsprintf (char * fmt, ...) {
 
   vprintStringBuf (fmt, args);
 
-  //__pre_gc ();
+  __pre_gc ();
 
   push_extra_root ((void**)&fmt);
   s = Bstring (stringBuf.contents);
   pop_extra_root ((void**)&fmt);
 
-  //__post_gc ();
+  __post_gc ();
   
   deleteStringBuf ();
 
@@ -1353,11 +1333,11 @@ extern void* LgetEnv (char *var) {
   if (e == NULL)
     return (void*)BOX(0);
 
-  //__pre_gc ();
+  __pre_gc ();
 
   s = Bstring (e);
 
-  //__post_gc ();
+  __post_gc ();
 
   return s;
 }
@@ -1534,7 +1514,7 @@ extern void set_args (int argc, char *argv[]) {
   int n = argc, *p = NULL;
   int i;
   
-  //__pre_gc ();
+  __pre_gc ();
 
 #ifdef DEBUG_PRINT
   indent++; print_indent ();
@@ -1560,7 +1540,7 @@ extern void set_args (int argc, char *argv[]) {
   }
 
   pop_extra_root ((void**)&p);
-  //__post_gc ();
+  __post_gc ();
 
   global_sysargs = p;
   push_extra_root ((void**)&global_sysargs);

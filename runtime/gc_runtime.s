@@ -81,7 +81,7 @@ check12:
 
 	// check that it is not a pointer into the program stack
 	// i.e. the following is not true:
-	// __gc_stack_bottom <= (%eax) <= __gc_stack_top
+	// __gc_stack_top <= (%eax) <= __gc_stack_bottom
 check21:	
 			cmpl	%ebx, __gc_stack_top
 			jna	check22
