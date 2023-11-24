@@ -2,8 +2,9 @@
 *.o
 *.i
 *.s
-*.lama
-*.bc
+test.bc
+test.lama
 /cmake-build-debug
+/build
 .idea
 lamai

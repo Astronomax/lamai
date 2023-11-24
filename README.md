@@ -1,3 +1,9 @@
+| Lamai               |
+| ------------------- |
+| [![Lamai][1]][2] |
+
+[1]:  https://github.com/Astronomax/lamai/actions/workflows/test.yml/badge.svg
+[2]:  https://github.com/PLTools/Lama/actions
 # Lamai
 
 ![lama](https://raw.githubusercontent.com/PLTools/Lama/be0b32f7b9c75e61eff377cd34d4f65ebeeca204/lama.svg) is a programming language developed by JetBrains Research for educational purposes as an exemplary language to introduce the domain of programming languages, compilers, and tools. (https://github.com/PLTools/Lama)  
