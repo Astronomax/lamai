@@ -1,6 +1,7 @@
 TESTS=$(sort $(basename $(wildcard generated*.lama)))
 
 LAMAI=../../lamai
+LAMAC=lamac
 
 .PHONY: check $(TESTS)
 
@@ -8,7 +9,7 @@ check: $(TESTS)
 
 $(TESTS): %: %.lama
 	@echo $@
-	lamac -b $< > $@.bc && cat $@.input | $(LAMAI) $@.bc > $@.log && diff $@.log orig/$@.log
+	$(LAMAC) -b $< > $@.bc && cat $@.input | $(LAMAI) $@.bc > $@.log && diff $@.log orig/$@.log
 
 clean:
 	rm -f *.log *.bc *.s *~

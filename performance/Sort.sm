@@ -1,0 +1,353 @@
+IMPORT ("Std")
+PUBLIC ("main")
+EXTERN ("Llowercase")
+EXTERN ("Luppercase")
+EXTERN ("LtagHash")
+EXTERN ("LflatCompare")
+EXTERN ("LcompareTags")
+EXTERN ("LkindOf")
+EXTERN ("Ltime")
+EXTERN ("Lrandom")
+EXTERN ("LdisableGC")
+EXTERN ("LenableGC")
+EXTERN ("Ls__Infix_37")
+EXTERN ("Ls__Infix_47")
+EXTERN ("Ls__Infix_42")
+EXTERN ("Ls__Infix_45")
+EXTERN ("Ls__Infix_43")
+EXTERN ("Ls__Infix_62")
+EXTERN ("Ls__Infix_6261")
+EXTERN ("Ls__Infix_60")
+EXTERN ("Ls__Infix_6061")
+EXTERN ("Ls__Infix_3361")
+EXTERN ("Ls__Infix_6161")
+EXTERN ("Ls__Infix_3838")
+EXTERN ("Ls__Infix_3333")
+EXTERN ("Ls__Infix_58")
+EXTERN ("Li__Infix_4343")
+EXTERN ("Lcompare")
+EXTERN ("Lwrite")
+EXTERN ("Lread")
+EXTERN ("Lfailure")
+EXTERN ("Lfexists")
+EXTERN ("Lfwrite")
+EXTERN ("Lfread")
+EXTERN ("Lfclose")
+EXTERN ("Lfopen")
+EXTERN ("Lfprintf")
+EXTERN ("Lprintf")
+EXTERN ("LmakeString")
+EXTERN ("Lsprintf")
+EXTERN ("LregexpMatch")
+EXTERN ("Lregexp")
+EXTERN ("Lsubstring")
+EXTERN ("LmatchSubString")
+EXTERN ("Lstringcat")
+EXTERN ("LreadLine")
+EXTERN ("Ltl")
+EXTERN ("Lhd")
+EXTERN ("Lsnd")
+EXTERN ("Lfst")
+EXTERN ("Lhash")
+EXTERN ("Lclone")
+EXTERN ("Llength")
+EXTERN ("Lstring")
+EXTERN ("LmakeArray")
+EXTERN ("LstringInt")
+EXTERN ("global_sysargs")
+EXTERN ("Lsystem")
+EXTERN ("LgetEnv")
+EXTERN ("Lassert")
+LABEL ("main")
+BEGIN ("main", 2, 0, [], [], [])
+SLABEL ("L1")
+LINE (29)
+LINE (31)
+CONST (1000)
+CALL ("Lgenerate", 1, false)
+CALL ("LbubbleSort", 1, false)
+SLABEL ("L2")
+END
+LABEL ("Lgenerate")
+BEGIN ("Lgenerate", 1, 0, [], ["n"], [{ blab="L5"; elab="L6"; names=[]; subs=[{ blab="L8"; elab="L9"; names=[]; subs=[{ blab="L19"; elab="L20"; names=[]; subs=[]; }; { blab="L12"; elab="L13"; names=[]; subs=[]; }]; }]; }])
+SLABEL ("L5")
+SLABEL ("L8")
+LINE (28)
+LD (Arg (0))
+CJMP ("z", "L11")
+SLABEL ("L12")
+LD (Arg (0))
+LD (Arg (0))
+CONST (1)
+BINOP ("-")
+CALL ("Lgenerate", 1, false)
+SEXP ("cons", 2)
+SLABEL ("L13")
+JMP ("L7")
+LABEL ("L11")
+SLABEL ("L19")
+CONST (0)
+SLABEL ("L20")
+JMP ("L7")
+SLABEL ("L9")
+LABEL ("L7")
+SLABEL ("L6")
+END
+LABEL ("LbubbleSort")
+BEGIN ("LbubbleSort", 1, 0, [], ["l"], [{ blab="L21"; elab="L22"; names=[]; subs=[{ blab="L24"; elab="L25"; names=[]; subs=[]; }]; }])
+SLABEL ("L21")
+SLABEL ("L24")
+LINE (22)
+LINE (24)
+LD (Arg (0))
+CALL ("Lrec_7", 1, true)
+SLABEL ("L25")
+LABEL ("L23")
+SLABEL ("L22")
+END
+LABEL ("Lrec_7")
+BEGIN ("Lrec_7", 1, 1, [], ["l"], [{ blab="L27"; elab="L28"; names=[]; subs=[{ blab="L30"; elab="L31"; names=[]; subs=[{ blab="L45"; elab="L46"; names=[("l", 0)]; subs=[{ blab="L47"; elab="L48"; names=[]; subs=[]; }]; }; { blab="L38"; elab="L39"; names=[("l", 0)]; subs=[{ blab="L40"; elab="L41"; names=[]; subs=[]; }]; }]; }]; }])
+SLABEL ("L27")
+SLABEL ("L30")
+LINE (18)
+LD (Arg (0))
+CALL ("Linner_7", 1, false)
+DUP
+SLABEL ("L38")
+DUP
+ARRAY (2)
+CJMP ("nz", "L36")
+LABEL ("L37")
+DROP
+JMP ("L35")
+LABEL ("L36")
+DUP
+CONST (0)
+ELEM
+CONST (1)
+BINOP ("==")
+CJMP ("z", "L37")
+DUP
+CONST (1)
+ELEM
+DROP
+DROP
+DUP
+CONST (1)
+ELEM
+ST (Local (0))
+DROP
+DROP
+SLABEL ("L40")
+LINE (19)
+LD (Local (0))
+CALL ("Lrec_7", 1, true)
+SLABEL ("L41")
+JMP ("L29")
+SLABEL ("L39")
+SLABEL ("L45")
+LABEL ("L35")
+DUP
+DUP
+ARRAY (2)
+CJMP ("nz", "L43")
+LABEL ("L44")
+DROP
+JMP ("L32")
+LABEL ("L43")
+DUP
+CONST (0)
+ELEM
+CONST (0)
+BINOP ("==")
+CJMP ("z", "L44")
+DUP
+CONST (1)
+ELEM
+DROP
+DROP
+DUP
+CONST (1)
+ELEM
+ST (Local (0))
+DROP
+DROP
+SLABEL ("L47")
+LINE (20)
+LD (Local (0))
+SLABEL ("L48")
+SLABEL ("L46")
+JMP ("L29")
+LABEL ("L32")
+FAIL ((18, 9), true)
+JMP ("L29")
+SLABEL ("L31")
+LABEL ("L29")
+SLABEL ("L28")
+END
+LABEL ("Linner_7")
+BEGIN ("Linner_7", 1, 6, [], ["l"], [{ blab="L49"; elab="L50"; names=[]; subs=[{ blab="L52"; elab="L53"; names=[]; subs=[{ blab="L97"; elab="L98"; names=[]; subs=[{ blab="L99"; elab="L100"; names=[]; subs=[]; }]; }; { blab="L61"; elab="L62"; names=[("x", 3); ("z", 2); ("y", 1); ("tl", 0)]; subs=[{ blab="L63"; elab="L64"; names=[]; subs=[{ blab="L82"; elab="L83"; names=[]; subs=[{ blab="L89"; elab="L90"; names=[("f", 5); ("z", 4)]; subs=[{ blab="L91"; elab="L92"; names=[]; subs=[]; }]; }]; }; { blab="L71"; elab="L72"; names=[]; subs=[]; }]; }]; }]; }]; }])
+SLABEL ("L49")
+SLABEL ("L52")
+LINE (7)
+LD (Arg (0))
+DUP
+SLABEL ("L61")
+DUP
+TAG ("cons", 2)
+CJMP ("nz", "L57")
+LABEL ("L58")
+DROP
+JMP ("L56")
+LABEL ("L57")
+DUP
+CONST (0)
+ELEM
+DROP
+DUP
+CONST (1)
+ELEM
+DUP
+TAG ("cons", 2)
+CJMP ("nz", "L59")
+LABEL ("L60")
+DROP
+JMP ("L58")
+LABEL ("L59")
+DUP
+CONST (0)
+ELEM
+DROP
+DUP
+CONST (1)
+ELEM
+DROP
+DROP
+DROP
+DUP
+CONST (0)
+ELEM
+ST (Local (3))
+DROP
+DUP
+CONST (1)
+ELEM
+ST (Local (2))
+DROP
+DUP
+CONST (1)
+ELEM
+CONST (0)
+ELEM
+ST (Local (1))
+DROP
+DUP
+CONST (1)
+ELEM
+CONST (1)
+ELEM
+ST (Local (0))
+DROP
+DROP
+SLABEL ("L63")
+LINE (9)
+LD (Local (3))
+LD (Local (1))
+CALL ("Lcompare", 2, false)
+CONST (0)
+BINOP (">")
+CJMP ("z", "L66")
+SLABEL ("L71")
+CONST (1)
+LINE (10)
+LD (Local (1))
+LD (Local (3))
+LD (Local (0))
+SEXP ("cons", 2)
+CALL ("Linner_7", 1, false)
+CONST (1)
+ELEM
+SEXP ("cons", 2)
+CALL (".array", 2, true)
+SLABEL ("L72")
+JMP ("L51")
+LABEL ("L66")
+SLABEL ("L82")
+LINE (11)
+LD (Local (2))
+CALL ("Linner_7", 1, false)
+DUP
+SLABEL ("L89")
+DUP
+ARRAY (2)
+CJMP ("nz", "L87")
+LABEL ("L88")
+DROP
+JMP ("L84")
+LABEL ("L87")
+DUP
+CONST (0)
+ELEM
+DROP
+DUP
+CONST (1)
+ELEM
+DROP
+DROP
+DUP
+CONST (0)
+ELEM
+ST (Local (5))
+DROP
+DUP
+CONST (1)
+ELEM
+ST (Local (4))
+DROP
+DROP
+SLABEL ("L91")
+LD (Local (5))
+LD (Local (3))
+LD (Local (4))
+SEXP ("cons", 2)
+CALL (".array", 2, true)
+SLABEL ("L92")
+SLABEL ("L90")
+JMP ("L51")
+LABEL ("L84")
+FAIL ((11, 17), true)
+JMP ("L51")
+SLABEL ("L83")
+SLABEL ("L64")
+JMP ("L51")
+SLABEL ("L62")
+SLABEL ("L97")
+LABEL ("L56")
+DUP
+DROP
+DROP
+SLABEL ("L99")
+CONST (0)
+LINE (13)
+LD (Arg (0))
+CALL (".array", 2, true)
+SLABEL ("L100")
+SLABEL ("L98")
+JMP ("L51")
+SLABEL ("L53")
+LABEL ("L51")
+SLABEL ("L50")
+END
+LABEL ("Lcompare")
+BEGIN ("Lcompare", 2, 0, [], ["x"; "y"], [{ blab="L103"; elab="L104"; names=[]; subs=[{ blab="L106"; elab="L107"; names=[]; subs=[]; }]; }])
+SLABEL ("L103")
+SLABEL ("L106")
+LINE (1)
+LD (Arg (0))
+LINE (2)
+LD (Arg (1))
+BINOP ("-")
+SLABEL ("L107")
+LABEL ("L105")
+SLABEL ("L104")
+END
