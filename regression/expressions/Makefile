@@ -1,6 +1,6 @@
 TESTS=$(sort $(basename $(wildcard generated*.lama)))
 
-LAMAI=../../lamai
+LAMAI=../../build/lamai
 LAMAC=lamac
 
 .PHONY: check $(TESTS)
