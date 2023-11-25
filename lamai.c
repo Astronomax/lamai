@@ -24,7 +24,7 @@ void *__stop_custom_data;
 char *code_stop_ptr;
 
 extern size_t __gc_stack_top, __gc_stack_bottom;
-extern void __gc_root_scan_stack ();
+//extern void __gc_root_scan_stack();
 
 /* The unpacked representation of bytecode file */
 typedef struct {
@@ -48,7 +48,7 @@ char* get_public_name (bytefile *f, int i) {
     return get_string (f, f->public_ptr[i*2]);
 }
 
-/* Gets an offset for a publie symbol */
+/* Gets an offset for a public symbol */
 int get_public_offset (bytefile *f, int i) {
     return f->public_ptr[i*2+1];
 }
@@ -119,10 +119,9 @@ typedef struct Lama_CallInfo {
 
 typedef struct Lama_State {
     char *ip;
-    //void **global_mem;
-    StkId stack;
+    //StkId stack;
     StkId base;
-    StkId top;
+    //StkId top;
     StkId stack_last;
     lama_CallInfo *base_ci;
     lama_CallInfo *ci;
@@ -131,6 +130,8 @@ typedef struct Lama_State {
     int stacksize;
     int n_globals;
 } lama_State;
+
+lama_State eval_state;
 
 #define ttisnumber(o)(UNBOXED(o))
 #define ttisstring(o)(!UNBOXED(o)&&TAG(TO_DATA(o)->tag)==STRING_TAG)
@@ -141,25 +142,33 @@ typedef struct Lama_State {
 #define cast(t,exp)((t)(exp))
 #define check(p)assert(p)
 
+#define stack_bottom cast(StkId, __gc_stack_bottom)
+#define stack_top cast(StkId, __gc_stack_top)
+#define foreach_stack(ptr) for(ptr = stack_top; ptr < stack_bottom; ++ptr)
+#define foreach_ci(L, ptr) for(ptr = L->base_ci; ptr <= L->ci; ++ptr)
+
+#define set_gc_ptr(ptr,v)ptr=cast(size_t,v)
+
+
 static void lama_reallocstack(lama_State *L, int newsize) {
-    void **oldstack = L->stack;
-    L->stack = cast(void**, malloc(sizeof(void*) * newsize));
-    memcpy(L->stack, oldstack, L->stacksize * sizeof(void*));
-    L->base = (L->base - oldstack) + L->stack;
-    L->top = (L->top - oldstack) + L->stack;
-    __gc_stack_top = cast(size_t, L->stack);
-    __gc_stack_bottom = cast(size_t, L->top);
-    for(StkId ptr = L->stack; ptr < L->top; ++ptr) {
-        if(!UNBOXED(*ptr) && oldstack <= cast(void**, *ptr)\
-            && cast(void**, *ptr) <= L->stack_last) {
-            *ptr = (cast(void**, *ptr) - oldstack) + L->stack;
+    StkId oldstack = stack_top;
+    set_gc_ptr(__gc_stack_top, malloc(sizeof(void*) * newsize));
+    memcpy(stack_top, oldstack, L->stacksize * sizeof(void*));
+    L->base = (L->base - oldstack) + stack_top;
+    set_gc_ptr(__gc_stack_bottom, (stack_bottom\
+        - oldstack) + stack_top);
+    StkId st_ptr;
+    foreach_stack(st_ptr) {
+        if(!UNBOXED(*st_ptr) && oldstack <= cast(StkId, *st_ptr) && cast(StkId, *st_ptr) <= L->stack_last) {
+            *st_ptr = (cast(void**, *st_ptr) - oldstack) + stack_top;
         }
     }
-    for(lama_CallInfo *ptr = L->base_ci; ptr <= L->ci; ++ptr) {
-        ptr->base = (ptr->base - oldstack) + L->stack;
+    lama_CallInfo *ci_ptr;
+    foreach_ci(L, ci_ptr) {
+        ci_ptr->base = (ci_ptr->base - oldstack) + stack_top;
     }
     L->stacksize = newsize;
-    L->stack_last = L->stack + L->stacksize - 1;
+    L->stack_last = stack_top + L->stacksize - 1;
     free(oldstack);
 }
 
@@ -170,8 +179,8 @@ static void lama_growstack(lama_State *L, int n) {
         lama_reallocstack(L, 2 * L->stacksize);
 }
 
-#define lama_checkstack(L,n)if((char*)L->stack_last-(char*)L->top<=(n)*(int)sizeof(void*))lama_growstack(L,n);
-#define incr_top(L){lama_checkstack(L,1);L->top++;__gc_stack_bottom += sizeof(void*);}
+#define lama_checkstack(L,n)if(L->stack_last-stack_bottom<=n)lama_growstack(L,n);
+#define incr_top(L){lama_checkstack(L,1);set_gc_ptr(__gc_stack_bottom, stack_bottom + 1);}
 
 #define lama_numadd(a,b)((a)+(b))
 #define lama_numsub(a,b)((a)-(b))
@@ -214,20 +223,19 @@ typedef enum{
     LOC_N
 } n_locs;
 
-static void lama_settop(lama_State *L, int idx) {
+static void lama_setbottom(lama_State *L, int idx) {
     if(idx > 0)
         check(idx <= (L->stack_last - L->base));
     else
-        check(-idx <= (L->top - L->base));
-    L->top += idx;
-    __gc_stack_bottom += idx * sizeof(void*);
+        check(-idx <= (stack_bottom - L->base));
+    set_gc_ptr(__gc_stack_bottom, stack_bottom + idx);
 }
 
-#define lama_pop(L,n)lama_settop(L,-(n))
+#define lama_pop(L,n)lama_setbottom(L,-(n))
 
-static void **idx2StkId(lama_State *L, int idx) {
-    check(idx <= L->top - L->base);
-    return L->top - idx;
+static StkId idx2StkId(lama_State *L, int idx) {
+    check(idx <= stack_bottom - L->base);
+    return stack_bottom - idx;
 }
 
 static void **loc2adr(lama_State *L, lama_Loc loc) {
@@ -239,7 +247,7 @@ static void **loc2adr(lama_State *L, lama_Loc loc) {
     switch (loc.tt) {
         case LOC_G:
             check(idx < L->n_globals);
-            return L->stack + idx;
+            return stack_top + idx;
         case LOC_L:
             check(idx < n_locs);
             return L->base - n_locs + idx;
@@ -259,8 +267,8 @@ static int lama_tonumber(lama_State *L, int idx) {
     return UNBOX(o);
 }
 
-#define lama_push(L,o){*L->top = o;incr_top(L);}
-#define lama_pushnumber(L,o){*L->top = cast(void*, BOX(o));incr_top(L);}
+#define lama_push(L,o){*stack_bottom = o;incr_top(L);}
+#define lama_pushnumber(L,o){*stack_bottom = cast(void*, BOX(o));incr_top(L);}
 
 static void lama_reallocCI(lama_State *L, int newsize) {
     lama_CallInfo *oldci = L->base_ci;
@@ -289,11 +297,11 @@ static void lama_begin(lama_State *L, int n_caps, int n_args, int n_locs, char *
     ci->n_args = n_args;
     ci->n_locs = n_locs;
 
-    if(fun == NULL) fun = L->top;
+    if(fun == NULL) fun = stack_bottom;
     lama_push(L, fun);
     lama_checkstack(L, n_caps + n_locs)
-    lama_settop(L, n_caps + n_locs);
-    L->base = ci->base = L->top;
+    lama_setbottom(L, n_caps + n_locs);
+    L->base = ci->base = stack_bottom;
 
     for(int i = 0; i < n_caps; i++) {
         lama_Loc loc = {i, LOC_C};
@@ -310,7 +318,7 @@ static void lama_end(lama_State *L) {
     int n_caps = L->ci->n_caps;
     int n_args = L->ci->n_args;
     int n_locs = L->ci->n_locs;
-    check((L->top - L->base) == 1);
+    check((stack_bottom - L->base) == 1);
 
     void *fun = *(L->base - (n_caps + n_locs + 1));
     for(int i = 0; i < n_caps; i++) {
@@ -318,8 +326,8 @@ static void lama_end(lama_State *L) {
         cast(void**, fun)[i + 1] = *loc2adr(L, loc);
     }
 
-    L->top -= n_caps + n_args + n_locs + 2;
-    __gc_stack_bottom -= sizeof(int) * (n_caps + n_args + n_locs + 2);
+    set_gc_ptr(__gc_stack_bottom, stack_bottom - (n_caps + n_args + n_locs + 2));
+
     L->ip = L->ci->ret_ip;
     --L->ci;
     L->base = L->ci->base;
@@ -327,7 +335,7 @@ static void lama_end(lama_State *L) {
 }
 
 void eval (bytefile *bf, char *fname) {
-    lama_State *L = cast(lama_State*, malloc(sizeof(lama_State)));
+   lama_State *L = &eval_state;
 
 #define INT (L->ip += sizeof (int), *(int*)(L->ip - sizeof (int)))
 #define BYTE *L->ip++
@@ -336,27 +344,28 @@ void eval (bytefile *bf, char *fname) {
 
     L->ip = bf->code_ptr;
     L->n_globals = bf->global_area_size;
-    L->stack = L->base = L->top = cast(void**,\
+    __gc_stack_top = set_gc_ptr(__gc_stack_bottom,\
         malloc(sizeof(void*) * INIT_STACK_SIZE));
+
+    L->base = stack_top;
+
     L->base_ci = L->ci = cast(lama_CallInfo*,\
         malloc(sizeof(lama_CallInfo) * INIT_STACK_SIZE));
     L->stacksize = INIT_STACK_SIZE;
     L->size_ci = INIT_STACK_SIZE;
     L->end_ci = L->ci + INIT_STACK_SIZE;
-    L->stack_last = L->stack + INIT_STACK_SIZE;
-    lama_settop(L, L->n_globals);
-    L->base = L->top;
-    __gc_stack_top = cast(size_t, L->stack - 1);
-    __gc_stack_bottom = cast(size_t, L->top - 1);
-    //lama_settop(L, 2);
+    L->stack_last = stack_top + INIT_STACK_SIZE;
+    lama_setbottom(L, L->n_globals);
+    L->base = stack_bottom;
+
     lama_push(L, cast(void*, 1));
     lama_push(L, cast(void*, 1));
 
     L->ci->n_locs = L->ci->n_args = 0;
     L->ci->base = L->base;
     lama_pushnumber(L, 0);
-    //lama_push(L, NULL);
-    *(L->top) = L->top;
+
+    *stack_bottom = cast(void*, __gc_stack_bottom);
     incr_top(L);
 
     char *ret_ip = code_stop_ptr;
@@ -503,7 +512,7 @@ void eval (bytefile *bf, char *fname) {
 
                 lama_Loc loc = {INT, l};
                 lama_push(L, loc2adr(L, loc));
-                lama_push(L, L->top);
+                lama_push(L, stack_bottom);
                 break;
             }
             case 4: { //ST
@@ -608,7 +617,7 @@ void eval (bytefile *bf, char *fname) {
                         lama_pushnumber(L, 0); //n_caps
                         //lama_push(L, NULL);
 
-                        *(L->top) = L->top;
+                        *stack_bottom = cast(void*, __gc_stack_bottom);
                         incr_top(L);
 
                         //lama_push(L, cast(void*, L->ip)); //ret_ip
@@ -733,10 +742,8 @@ void eval (bytefile *bf, char *fname) {
     }
     while (true);
     stop:
-    free(L->stack);
+    free(stack_top);
     free(L->base_ci);
-    //free(L->global_mem);
-    free(L);
 }
 
 int main (int argc, char* argv[]) {
